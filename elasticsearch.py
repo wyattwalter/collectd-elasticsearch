@@ -19,13 +19,12 @@ import json
 import urllib2
 import socket
 import collections
+from distutils.version import StrictVersion
 
 PREFIX = "elasticsearch"
 ES_CLUSTER = "elasticsearch"
 ES_HOST = "localhost"
 ES_PORT = 9200
-ES_VERSION = "1.0"
-ES_URL = ""
 VERBOSE_LOGGING = False
 
 Stat = collections.namedtuple('Stat', ('type', 'path'))
@@ -64,7 +63,7 @@ STATS_ES1 = {
     'indices.refresh.time': Stat("counter", "nodes.%s.indices.refresh.total_time_in_millis"),
 }
 
-# DICT: ElasticSearch 0.9.x
+# DICT: ElasticSearch 0.90.x
 STATS_ES09 = {
 
     ##CPU
@@ -156,7 +155,7 @@ def lookup_stat(stat, json):
 
 def configure_callback(conf):
     """Received configuration information"""
-    global ES_HOST, ES_PORT, ES_URL, ES_VERSION, VERBOSE_LOGGING, STATS_CUR
+    global ES_HOST, ES_PORT, VERBOSE_LOGGING
     for node in conf.children:
         if node.key == 'Host':
             ES_HOST = node.values[0]
@@ -166,30 +165,36 @@ def configure_callback(conf):
             VERBOSE_LOGGING = bool(node.values[0])
         elif node.key == 'Cluster':
             ES_CLUSTER = node.values[0]
-        elif node.key == "Version":
-            ES_VERSION = node.values[0]
         else:
             collectd.warning('elasticsearch plugin: Unknown config key: %s.'
                              % node.key)
-    if ES_VERSION == "1.0":
-        ES_URL = "http://" + ES_HOST + ":" + str(ES_PORT) + "/_nodes/_local/stats/transport,http,process,jvm,indices"
-        STATS_CUR = dict(STATS.items() + STATS_ES1.items())
-    else:
-        ES_URL = "http://" + ES_HOST + ":" + str(ES_PORT) + "/_cluster/nodes/_local/stats?http=true&process=true&jvm=true&transport=true"
-        STATS_CUR = dict(STATS.items() + STATS_ES09.items())
 
-    log_verbose('Configured with version=%s, host=%s, port=%s, url=%s' % (ES_VERSION, ES_HOST, ES_PORT, ES_URL))
+    log_verbose('Configured with host=%s, port=%s' % (ES_HOST, ES_PORT))
+
+def fetch_url(url):
+    try:
+        result = json.load(urllib2.urlopen(url, timeout=10))
+    except urllib2.URLError, e:
+        collectd.error('elasticsearch plugin: Error connecting to %s - %r' % (url, e))
+        return None
+    return result
 
 
 def fetch_stats():
-    global ES_CLUSTER
+    global ES_CLUSTER, ES_HOST, ES_PORT, STATS_CUR
 
-    try:
-        result = json.load(urllib2.urlopen(ES_URL, timeout=10))
-    except urllib2.URLError, e:
-        collectd.error('elasticsearch plugin: Error connecting to %s - %r' % (ES_URL, e))
-        return None
-    print result['cluster_name']
+    base_url = 'http://' + ES_HOST + ':' + str(ES_PORT) + '/'
+    server_info = fetch_url(base_url)
+    version = server_info['version']['number']
+
+    if StrictVersion(version) >= StrictVersion('1.0.0'):
+        ES_URL = base_url + '_nodes/_local/stats/transport,http,process,jvm,indices'
+        STATS_CUR = dict(STATS.items() + STATS_ES1.items())
+    else:
+        ES_URL = base_url + '_cluster/nodes/_local/stats?http=true&process=true&jvm=true&transport=true'
+        STATS_CUR = dict(STATS.items() + STATS_ES09.items())
+
+    result = fetch_url(ES_URL)
 
     ES_CLUSTER = result['cluster_name']
     return parse_stats(result)
