@@ -46,12 +46,6 @@ STATS_ES1 = {
     'indices.cache.filter.evictions': Stat("counter", "nodes.%s.indices.filter_cache.evictions"),
     'indices.cache.filter.size': Stat("bytes", "nodes.%s.indices.filter_cache.memory_size_in_bytes"),
 
-    ##GC
-    'jvm.gc.time': Stat("counter", "nodes.%s.jvm.gc.collectors.young.collection_time_in_millis"),
-    'jvm.gc.count': Stat("counter", "nodes.%s.jvm.gc.collectors.young.collection_count"),
-    'jvm.gc.old-time': Stat("counter", "nodes.%s.jvm.gc.collectors.old.collection_time_in_millis"),
-    'jvm.gc.old-count': Stat("counter", "nodes.%s.jvm.gc.collectors.old.collection_count"),
-
     ## FLUSH
     'indices.flush.total': Stat("counter", "nodes.%s.indices.flush.total"),
     'indices.flush.time': Stat("counter", "nodes.%s.indices.flush.total_time_in_millis"),
@@ -72,10 +66,6 @@ STATS_ES1 = {
 
 # DICT: ElasticSearch 0.9.x
 STATS_ES09 = {
-
-    ##GC
-    'jvm.gc.time': Stat("counter", "nodes.%s.jvm.gc.collection_time_in_millis"),
-    'jvm.gc.count': Stat("counter", "nodes.%s.jvm.gc.collection_count"),
 
     ##CPU
     'process.cpu.percent': Stat("gauge", "nodes.%s.process.cpu.percent"),
@@ -117,6 +107,12 @@ STATS = {
     'indices.search.fetch-time': Stat("counter", "nodes.%s.indices.search.fetch_time_in_millis"),
 
     # JVM METRICS #
+    ##GC
+    'jvm.gc.time': Stat("counter", "nodes.%s.jvm.gc.collectors.young.collection_time_in_millis"),
+    'jvm.gc.count': Stat("counter", "nodes.%s.jvm.gc.collectors.young.collection_count"),
+    'jvm.gc.old-time': Stat("counter", "nodes.%s.jvm.gc.collectors.old.collection_time_in_millis"),
+    'jvm.gc.old-count': Stat("counter", "nodes.%s.jvm.gc.collectors.old.collection_count"),
+
     ## MEM
     'jvm.mem.heap-committed': Stat("bytes", "nodes.%s.jvm.mem.heap_committed_in_bytes"),
     'jvm.mem.heap-used': Stat("bytes", "nodes.%s.jvm.mem.heap_used_in_bytes"),
