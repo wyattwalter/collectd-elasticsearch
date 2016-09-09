@@ -1,4 +1,5 @@
 #! /usr/bin/python
+#source: https://github.com/wyattwalter/collectd-elasticsearch
 #Copyright 2014 Jeremy Carroll
 #
 #Licensed under the Apache License, Version 2.0 (the "License");
@@ -31,8 +32,26 @@ Stat = collections.namedtuple('Stat', ('type', 'path'))
 
 STATS_CUR = {}
 
+STATS_ES14 = {
+    # changed from 1.3 -> 1.4
+    'fielddata-breaker.estimated-size-in-bytes': Stat("bytes", "nodes.%s.breakers.fielddata.estimated_size_in_bytes"),
+    'fielddata-breaker.maximum-size-in-bytes': Stat("bytes", "nodes.%s.breakers.fielddata.limit_size_in_bytes"),
+    'fielddata-breaker.tripped': Stat("counter", "nodes.%s.breakers.fielddata.tripped"),
+
+    'request-breaker.estimated-size-in-bytes': Stat("bytes", "nodes.%s.breakers.request.estimated_size_in_bytes"),
+    'request-breaker.maximum-size-in-bytes': Stat("bytes", "nodes.%s.breakers.request.limit_size_in_bytes"),
+    'request-breaker.tripped': Stat("counter", "nodes.%s.breakers.request.tripped"),
+}
+
+STATS_ES13 = {
+    # FIELDDATA BREAKERS #
+    'fielddata-breaker.estimated-size-in-bytes': Stat("bytes", "nodes.%s.fielddata_breaker.estimated_size_in_bytes"),
+    'fielddata-breaker.maximum-size-in-bytes': Stat("bytes", "nodes.%s.fielddata_breaker.maximum_size_in_bytes"),
+    'fielddata-breaker.tripped': Stat("counter", "nodes.%s.fielddata_breaker.tripped"),
+}
+
 # DICT: ElasticSearch 1.0.0
-STATS_ES1 = {
+STATS_ES1X = {
     ## STORE
     'indices.store.throttle-time': Stat("counter", "nodes.%s.indices.store.throttle_time_in_millis"),
 
@@ -136,6 +155,7 @@ STATS = {
 
     # PROCESS METRICS #
     'process.open_file_descriptors': Stat("gauge", "nodes.%s.process.open_file_descriptors"),
+
 }
 
 
@@ -171,6 +191,7 @@ def configure_callback(conf):
 
     log_verbose('Configured with host=%s, port=%s' % (ES_HOST, ES_PORT))
 
+
 def fetch_url(url):
     try:
         result = json.load(urllib2.urlopen(url, timeout=10))
@@ -188,11 +209,24 @@ def fetch_stats():
     version = server_info['version']['number']
 
     if StrictVersion(version) >= StrictVersion('1.0.0'):
-        ES_URL = base_url + '_nodes/_local/stats/transport,http,process,jvm,indices'
-        STATS_CUR = dict(STATS.items() + STATS_ES1.items())
+        ES_URL = base_url + '_nodes/_local/stats/transport,http,process,jvm,indices,breaker,thread_pool'
+        STATS_CUR = dict(STATS.items() + STATS_ES1X.items())
+        if StrictVersion(version) >= StrictVersion('1.4.0'):
+            STATS_CUR = dict(STATS_CUR.items() + STATS_ES14.items())
+        else:
+            STATS_CUR = dict(STATS_CUR.items() + STATS_ES13.items())
     else:
-        ES_URL = base_url + '_cluster/nodes/_local/stats?http=true&process=true&jvm=true&transport=true'
+        ES_URL = base_url + '_cluster/nodes/_local/stats?http=true&process=true&jvm=true&transport=true&thread_pool=true'
         STATS_CUR = dict(STATS.items() + STATS_ES09.items())
+
+    # add info on thread pools
+    for pool in ['generic', 'index', 'get', 'snapshot', 'merge', 'optimize', 'bulk', 'warmer', 'flush', 'search', 'refresh']:
+      for attr in ['threads', 'queue', 'active', 'largest']:
+        path = 'thread_pool.{0}.{1}'.format(pool, attr)
+        STATS_CUR[path] = Stat("gauge", 'nodes.%s.{0}'.format(path))
+      for attr in ['completed', 'rejected']:
+        path = 'thread_pool.{0}.{1}'.format(pool, attr)
+        STATS_CUR[path] = Stat("counter", 'nodes.%s.{0}'.format(path))
 
     result = fetch_url(ES_URL)
 
